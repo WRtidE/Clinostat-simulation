@@ -1,0 +1,6 @@
+node_modules/
+preview*.png
+export-*.png
+export-*.csv
+.DS_Store
+Thumbs.db

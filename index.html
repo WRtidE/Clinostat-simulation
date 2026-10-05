@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7f8">
+  <title>二轴回转器 · 交互仿真</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="simulation.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="header">
+    <a class="brand" href="./index.html"><span class="brand-mark" aria-hidden="true">◎</span><span>ORBIT<span class="brand-sub">运动仿真实验室</span></span></a>
+    <div class="header-right"><span class="live-dot"></span> 本地交互仿真 <span class="version">V 1.0</span></div>
+  </header>
+  <main>
+    <div class="title-row"><div><div class="eyebrow">DUAL-AXIS GIMBAL</div><h1>二轴回转器<span class="title-slash"> / </span><span class="title-detail">模拟微重力</span></h1><p>独立控制两轴转速，评估样品坐标系中的重力矢量平均效果。</p></div><span class="tag">平均矢量目标 ≤ 0.001 g</span></div>
+    <div class="workspace">
+      <aside class="controls panel">
+        <div class="section-heading"><h2>运动控制</h2><span class="small-label">CONTROL</span></div>
+        <div class="segmented" aria-label="运动模式"><button id="uniformMode" class="selected" aria-pressed="true">匀速模式</button><button id="randomMode" aria-pressed="false">随机模式</button></div>
+        <p id="modeDescription" class="mode-description">两轴以设定的转速持续旋转，负值表示反向。</p>
+        <section id="uniformControls">
+          <div class="axis-control"><div class="label-row"><label for="outerSpeedInput"><span class="axis-dot outer"></span>外轴转速 <small>α · 固定 X 轴</small></label><div class="parameter-input"><input id="outerSpeedInput" type="number" min="-10" max="10" step="any" value="1.33" inputmode="decimal" aria-describedby="outerSpeedError"><span>rpm</span></div></div><input id="outerSpeed" type="range" min="-10" max="10" step="0.01" value="1.33" aria-label="外轴转速滑块"><div class="range-labels"><span>−10 rpm</span><output id="outerSpeedValue">1.33 rpm</output><span>10 rpm</span></div><p id="outerSpeedError" class="input-error" role="alert" hidden></p></div>
+          <div class="axis-control"><div class="label-row"><label for="innerSpeedInput"><span class="axis-dot inner"></span>内轴转速 <small>β · 随动 Y 轴</small></label><div class="parameter-input"><input id="innerSpeedInput" type="number" min="-10" max="10" step="any" value="2" inputmode="decimal" aria-describedby="innerSpeedError"><span>rpm</span></div></div><input id="innerSpeed" class="amber" type="range" min="-10" max="10" step="0.01" value="2" aria-label="内轴转速滑块"><div class="range-labels"><span>−10 rpm</span><output id="innerSpeedValue">2.00 rpm</output><span>10 rpm</span></div><p id="innerSpeedError" class="input-error" role="alert" hidden></p></div>
+        </section>
+        <section id="randomControls" hidden>
+          <div class="axis-control"><div class="label-row"><label for="outerMaxInput"><span class="axis-dot outer"></span>外轴速度上限</label><div class="parameter-input"><input id="outerMaxInput" type="number" min="0.01" max="10" step="any" value="3.33" inputmode="decimal" aria-describedby="outerMaxError"><span>rpm</span></div></div><input id="outerMax" type="range" min="0.01" max="10" step="0.01" value="3.33" aria-label="外轴速度上限滑块"><p id="outerMaxError" class="input-error" role="alert" hidden></p><small class="random-target" id="outerTarget">当前目标：— rpm</small></div>
+          <div class="axis-control"><div class="label-row"><label for="innerMaxInput"><span class="axis-dot inner"></span>内轴速度上限</label><div class="parameter-input"><input id="innerMaxInput" type="number" min="0.01" max="10" step="any" value="4.17" inputmode="decimal" aria-describedby="innerMaxError"><span>rpm</span></div></div><input id="innerMax" class="amber" type="range" min="0.01" max="10" step="0.01" value="4.17" aria-label="内轴速度上限滑块"><p id="innerMaxError" class="input-error" role="alert" hidden></p><small class="random-target" id="innerTarget">当前目标：— rpm</small></div>
+          <div class="acceleration-control"><div class="label-row"><label for="acceleration">加速度</label><div class="parameter-input acceleration-input"><input id="acceleration" type="number" min="0.000001" max="10" step="any" value="0.01" inputmode="decimal" aria-describedby="accelerationError"><span>rpm/s</span></div></div><p id="accelerationError" class="input-error" role="alert" hidden></p></div>
+          <div class="seed-row"><label for="seed">随机种子</label><input id="seed" type="number" min="0" max="4294967295" value="42" step="1"></div>
+          <p class="field-note">两轴以设定加速度从当前转速追踪目标，达到后立即生成下一个随机转速。速度上限范围 0.01～10 rpm，加速度范围 0.000001～10 rpm/s；相同种子与参数可复现。</p>
+        </section>
+        <hr>
+        <div class="label-row"><label for="timeScale">仿真倍率</label><output id="timeScaleValue">1×</output></div>
+        <div class="time-scale-controls"><div class="time-scale-input"><input id="timeScale" type="number" min="0.01" max="1000" step="any" value="1" inputmode="decimal" aria-describedby="timeScaleHint timeScaleError"><span aria-hidden="true">×</span></div><select id="timeScalePreset" aria-label="常用仿真倍率"><option value="">自定义倍率</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1× · 实时</option><option value="2">2×</option><option value="4">4×</option><option value="10">10×</option><option value="100">100×</option><option value="1000">1000×</option></select></div>
+        <p id="timeScaleHint" class="field-note">可输入 0.01～1000×，支持小数；倍率按仿真时间缩放。</p><p id="timeScaleError" class="input-error" role="alert" hidden></p>
+        <div class="action-row"><button id="toggleRun" class="primary"><span id="runIcon">Ⅱ</span> <span id="runText">暂停仿真</span></button><button id="reset" class="secondary">↺ 重置</button></div>
+        <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+        <hr>
+        <div class="section-heading"><h2>视图设置</h2><span class="small-label">VIEW</span></div>
+        <label class="switch-row" for="showAxes"><span>显示旋转轴</span><input type="checkbox" id="showAxes" checked></label>
+        <label class="switch-row" for="showTrail"><span>显示方向轨迹</span><input type="checkbox" id="showTrail" checked></label>
+        <div class="view-buttons" aria-label="相机视角"><button data-view="iso" class="selected" aria-pressed="true">透视</button><button data-view="front" aria-pressed="false">正视</button><button data-view="top" aria-pressed="false">俯视</button></div>
+        <div class="principle"><span class="principle-icon">i</span><p>外框绕固定 X 轴旋转，内框绕外框携带的 Y 轴旋转。样品随内框运动。</p></div>
+      </aside>
+      <div class="main-column">
+        <section class="scene-panel panel">
+          <div class="scene-header"><div class="scene-title"><span class="live-dot" id="statusDot"></span><span id="statusText">仿真运行中</span></div><div class="scene-meta"><span id="modeBadge">匀速模式</span><span class="divider">|</span><span id="clock">00:00.0</span></div></div>
+          <div class="canvas-wrap" id="canvasWrap"><canvas id="scene" aria-label="可拖拽旋转视角的二轴回转器三维仿真。蓝色为外框，橙色为内框。">浏览器需要支持 Canvas 才能显示三维仿真。</canvas><div class="scene-caption"><span class="caption-title">双轴嵌套旋转</span><span>样品局部 +Z 方向的轨迹</span></div><button id="resetView" class="floating-button" aria-label="还原相机视角">⌖ 还原视角</button><div class="canvas-help">拖动旋转视角<span>·</span>滚轮缩放</div><div class="scene-legend"><span><i class="axis-dot outer"></i>外框 α</span><span><i class="axis-dot inner"></i>内框 β</span><span><i class="axis-dot sample"></i>样品</span></div></div>
+          <div class="metrics"><div><span class="metric-label"><i class="axis-dot outer"></i>外轴角度 α</span><strong id="outerAngle">25.0<span>°</span></strong><small id="outerActual">1.330 rpm</small></div><div><span class="metric-label"><i class="axis-dot inner"></i>内轴角度 β</span><strong id="innerAngle">−32.0<span>°</span></strong><small id="innerActual">2.000 rpm</small></div><div><span class="metric-label">样品方向 · 世界坐标</span><strong class="vector" id="direction">(−0.53, −0.36, 0.77)</strong><small>局部 +Z 单位向量</small></div></div>
+        </section>
+        <section class="gravity-panel panel" aria-labelledby="gravityHeading">
+          <div class="chart-header"><div><h2 id="gravityHeading">重力矢量平均评估</h2><p>旋转中心 · 样品坐标系 · 从重置开始累计</p></div><span id="gravityStatus" class="gravity-status">等待累计</span></div>
+          <div class="gravity-metrics"><div><span>累计平均矢量的模</span><strong id="residualGravity">— g</strong><small id="gravityDuration">累计 0.0 s</small></div><div><span>评估目标</span><strong>0.001 <small>g</small></strong><small>平均矢量 ≤ 0.001 g</small></div><div><span>瞬时重力的模</span><strong>1.000 <small>g</small></strong><small>旋转改变方向，模长不变</small></div></div>
+          <div class="gravity-vector-row"><span>瞬时矢量 <output id="instantGravityVector">—</output> g</span><span>累计平均 <output id="meanGravityVector">—</output> g</span></div>
+          <div class="gravity-chart-controls"><label for="gravityTimeWindow">显示范围 <select id="gravityTimeWindow"><option value="0">全部时间</option><option value="600">最近 10 分钟</option><option value="60">最近 1 分钟</option></select></label><label for="gravityAxisScale">纵轴范围 <select id="gravityAxisScale"><option value="fixed">固定 0～1 g</option><option value="auto">自动缩放 · 线性</option></select></label></div>
+          <canvas id="gravityChart" aria-label="累计平均重力矢量模长随仿真时间的变化，线性等间隔纵轴，目标线为0.001g"></canvas>
+          <p id="gravityPlotSummary" class="plot-summary">保留原始记录与峰谷，按画面宽度绘制。</p>
+          <div class="gravity-actions"><span id="gravityChartNote">累计平均 = 重力矢量的时间积分 ÷ 累计时间</span><div class="gravity-export-buttons"><button id="fastForward" class="secondary">快进计算 10 分钟</button><button id="viewGravityResult" class="secondary" disabled>暂停并查看结果</button><button id="exportGravityPng" class="secondary" disabled>导出 PNG 图片</button><button id="exportGravityCsv" class="secondary" disabled>导出 CSV 数据</button></div></div>
+          <p id="exportStatus" class="export-status" role="status" aria-live="polite"></p>
+          <p class="gravity-explanation">此数值衡量重力方向在时间上的平均抵消，达标状态可能随累计时间回升。达到目标不代表真实重力降到 0.001 g 或获得与 ISS 相同的微重力；平均模长仍为 1 g。本模型评估理想旋转中心，不计离心、振动及流体效应。</p>
+        </section>
+        <section class="component-panel panel" aria-labelledby="componentHeading">
+          <div class="chart-header"><div><h2 id="componentHeading">重力加速度三分量曲线</h2><p>样品坐标系 · X、Y、Z 分量 · 单位 g</p></div></div>
+          <div class="component-chart-section">
+            <div class="component-chart-heading"><h3>重力加速度—时间变化曲线</h3><div class="component-legend"><span><i class="component-x"></i>gx</span><span><i class="component-y"></i>gy</span><span><i class="component-z"></i>gz</span></div></div>
+            <div class="gravity-chart-controls"><label for="instantTimeWindow">显示范围 <select id="instantTimeWindow"><option value="60" selected>最近 1 分钟</option><option value="600">最近 10 分钟</option><option value="0">全部时间</option></select></label></div>
+            <canvas id="instantComponentsChart" aria-label="样品坐标系的瞬时重力加速度X、Y、Z分量随仿真时间变化，单位g，线性纵轴从负1到正1g"></canvas>
+          </div>
+          <div class="component-chart-section">
+            <div class="component-chart-heading"><h3>平均重力加速度—时间变化曲线</h3><div class="component-legend"><span><i class="component-x"></i>平均 gx</span><span><i class="component-y"></i>平均 gy</span><span><i class="component-z"></i>平均 gz</span></div></div>
+            <div class="gravity-chart-controls"><label for="meanTimeWindow">显示范围 <select id="meanTimeWindow"><option value="0" selected>全部时间</option><option value="600">最近 10 分钟</option><option value="60">最近 1 分钟</option></select></label><label for="meanAxisScale">纵轴范围 <select id="meanAxisScale"><option value="fixed">固定 −1～1 g</option><option value="auto">自动缩放 · 线性</option></select></label></div>
+            <canvas id="meanComponentsChart" aria-label="从重置开始累计平均的重力加速度X、Y、Z分量随仿真时间变化，单位g，线性等间隔纵轴"></canvas>
+          </div>
+          <div class="component-footer"><span>平均分量 = 各分量的时间积分 ÷ 累计时间；切换显示范围不改变累计起点。</span><button id="exportComponentsPng" class="secondary" disabled>导出两张曲线 PNG</button></div><p id="componentExportStatus" class="export-status" role="status" aria-live="polite"></p>
+        </section>
+        <section class="coverage-panel panel" aria-labelledby="coverageHeading">
+          <div class="chart-header"><div><h2 id="coverageHeading">重力方向覆盖率</h2><p>样品坐标系 · 球面方向分布 · 从重置开始累计</p></div><strong id="coverageValue" class="coverage-value">0.00%</strong></div>
+          <div class="coverage-summary"><span>已覆盖 <output id="coverageCells">0 / 648</output> 个网格</span><span>方向采样 <output id="coverageSamples">0</output> 次</span><span>固定采样间隔 0.05 s</span></div>
+          <div class="coverage-plots">
+            <div><h3>覆盖率曲线</h3><canvas id="coverageChart" aria-label="累计重力方向覆盖率随仿真时间变化，线性纵轴0到100%"></canvas></div>
+            <div><h3>覆盖率图 <span>等面积球面展开</span></h3><canvas id="coverageMap" aria-label="重力方向分布图，36乘18个等面积球面网格，灰色未覆盖，浅黄色采样少，深蓝色采样多，橙色圆点为当前方向"></canvas></div>
+          </div>
+          <div class="coverage-sphere-section"><div class="coverage-sphere-heading"><div><h3>球面覆盖率图</h3><p>拖动旋转查看背面 · 颜色与展开图一致 · X / Y / Z 为样品坐标轴</p></div><button id="resetSphereView" class="secondary">重置球面视角</button></div><canvas id="coverageSphere" tabindex="0" aria-label="可拖动旋转的重力方向球面覆盖图，也可用方向键旋转，灰色未覆盖，浅黄色采样少，深蓝色采样多，橙色实心圆为正面当前方向，空心圆为背面方向"></canvas><p id="coverageSphereReadout" class="coverage-map-readout">指向球面可查看网格采样次数；当前方向在背面时显示为空心圆与虚线。</p></div>
+          <div class="coverage-map-legend"><span><i class="coverage-unvisited"></i>未覆盖 · 0 次</span><div class="coverage-color-scale"><div class="coverage-scale-title">已覆盖网格采样次数：少 → 多</div><div id="coverageScaleBar" class="coverage-scale-bar"></div><div class="coverage-scale-values"><output id="coverageMinCount">0 次</output><output id="coverageMaxCount">0 次</output></div><p id="coverageScaleNote">暂无采样</p></div><span><i class="coverage-current"></i>当前方向</span></div>
+          <p id="coverageMapReadout" class="coverage-map-readout">指向分布图可查看网格的方向范围及采样次数。</p>
+          <p class="coverage-note">覆盖率 = 至少被采样一次的网格数 ÷ 648。球面按经度与 Y 分量划分为 36 × 18 个等面积网格；图中 Y = sin(纬度)。覆盖率反映方向范围，颜色反映采样分布；覆盖率高不代表分布均匀或平均重力达标。</p>
+        </section>
+        <section class="chart-panel panel"><div class="chart-header"><div><h2>实时转速</h2><p>最近 30 秒仿真时间</p></div><div class="chart-legend"><span><i class="axis-dot outer"></i>外轴</span><span><i class="axis-dot inner"></i>内轴</span><span>rpm</span></div></div><canvas id="speedChart" aria-label="外轴和内轴转速（rpm）随仿真时间的变化曲线"></canvas><div class="chart-footer"><span id="chartNote">匀速模式下，两轴转速保持为设定值。</span><span id="sampleCount">0 个采样点</span></div></section>
+      </div>
+    </div>
+    <footer><span><span class="footer-dot"></span>无外部依赖 · 可离线运行</span><span>运动学与重力方向平均仿真 · 不是实际微重力认证</span></footer>
+  </main>
+  <dialog id="gravityResultDialog" aria-labelledby="gravityResultTitle">
+    <div class="result-dialog-header"><div><h2 id="gravityResultTitle">累计平均重力曲线 · 仿真结果</h2><p id="gravityResultSummary"></p></div><form method="dialog"><button class="secondary" aria-label="关闭结果预览">关闭</button></form></div>
+    <img id="gravityResultImage" alt="累计平均重力矢量的模随仿真时间变化的结果曲线，按所选范围显示，线性纵轴，包含0.001g目标线">
+    <div class="result-dialog-actions"><span>结果为当前时刻的快照；关闭后可手动继续仿真。</span><button id="resultExportPng" class="secondary">导出此图 PNG</button><button id="resultExportCsv" class="secondary">导出此图数据 CSV</button></div>
+    <p id="resultExportStatus" class="export-status" role="status" aria-live="polite"></p>
+  </dialog>
+</body>
+</html>
