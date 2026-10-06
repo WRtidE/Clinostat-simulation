@@ -26,12 +26,14 @@
     }
     flush();return result;
   }
-  function linearGravityAxis(points,start,end,automatic=false){
-    if(!automatic)return {upper:1,step:.2,decimals:1};
-    let peak=.001;
+  function linearGravityAxis(points,start,end,automatic=false,{ceiling=1,target=.001}={}){
+    function axis(upper,step){let decimals=1;while(decimals<9&&Math.abs(step-Number(step.toFixed(decimals)))>step*1e-8)decimals++;return {upper,step,decimals};}
+    const fixed=Math.max(ceiling,target,1e-6);
+    if(!automatic)return axis(fixed,fixed/5);
+    let peak=target;
     for(const point of points)if(point.time>=start&&point.time<=end)peak=Math.max(peak,point.residual);
-    if(peak>=.8)return {upper:1,step:.2,decimals:1};
-    const required=Math.max(.00125,peak*1.1),raw=required/5,power=10**Math.floor(Math.log10(raw));
+    if(peak>=fixed*.8&&peak<=fixed)return axis(fixed,fixed/5);
+    const required=Math.max(1e-6,target*1.25,peak*1.1),raw=required/5,power=10**Math.floor(Math.log10(raw));
     const step=[1,2,2.5,5,10].find(value=>value>=raw/power)*power;
     let decimals=1;while(decimals<9&&Math.abs(step-Number(step.toFixed(decimals)))>step*1e-8)decimals++;
     return {upper:Math.ceil(required/step)*step,step,decimals};
@@ -71,6 +73,9 @@
       this.limits = [3.33, 4.17];
       this.seed = 42;
       this.acceleration = .01; // rpm per second of simulation time
+      this.environmentGravity = 1; // multiples of standard Earth gravity
+      this.targetGravity = .001;
+      this.initialAngles = [25,-32];
       this.reset();
     }
     random() {
@@ -92,7 +97,7 @@
     }
     reset() {
       this.time = 0;
-      this.angles = [25, -32];
+      this.angles = [...this.initialAngles];
       this.gravityIntegral = [0, 0, 0]; // g·s, expressed in the sample frame
       this.coverage = new DirectionCoverage();
       this.rngState = Number(this.seed) >>> 0;
@@ -142,11 +147,24 @@
         }
       }
     }
-    gravityAt(angles) {
+    setEnvironmentGravity(value){
+      if(!Number.isFinite(value)||value<.000001||value>10)throw new Error('Invalid environment gravity');
+      this.environmentGravity=value;this.reset();
+    }
+    configurePartialGravity(target,innerRpm=2){
+      if(!Number.isFinite(target)||target<0||target>this.environmentGravity)throw new Error('Partial target must be between zero and environment gravity');
+      if(!Number.isFinite(innerRpm)||Math.abs(innerRpm)<.01||Math.abs(innerRpm)>10)throw new Error('Invalid inner-axis speed');
+      this.targetGravity=target;this.mode='uniform';this.uniform=[0,innerRpm];
+      this.initialAngles=[Math.acos(target/this.environmentGravity)/RAD,0];this.reset();
+      return this.initialAngles[0];
+    }
+    gravityDirectionAt(angles) {
       // Rᵀ · (0, −1, 0), where R = Rx(alpha) Ry(beta).
       const a = angles[0] * RAD, b = angles[1] * RAD;
       return [-Math.sin(a) * Math.sin(b), -Math.cos(a), Math.sin(a) * Math.cos(b)];
     }
+    gravityAt(angles){return this.gravityDirectionAt(angles).map(value=>value*this.environmentGravity);}
+    gravityDirection(){return this.gravityDirectionAt(this.angles);}
     gravity() { return this.gravityAt(this.angles); }
     integrateGravity(dt, accelerations) {
       // Four-point Gauss quadrature on <=0.25 s segments resolves the
@@ -169,7 +187,7 @@
       while (sampleTime <= end + EPSILON) {
         const t = Math.max(0, sampleTime - this.time);
         const angles = this.angles.map((angle, i) => angle + RPM_TO_DEG_PER_SECOND * (this.velocities[i] * t + .5 * accelerations[i] * t * t));
-        this.coverage.observe(this.gravityAt(angles));
+        this.coverage.observe(this.gravityDirectionAt(angles));
         sampleTime = (this.coverage.sampleCount + .5) * period;
       }
     }

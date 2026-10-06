@@ -41,6 +41,21 @@ switchMode.update(1);switchMode.velocities.forEach((v,i)=>near(Math.abs(v-curren
 switchMode.uniform=[4,-8];switchMode.setMode('uniform');assert.deepEqual(switchMode.velocities,[4,-8]);
 
 const stopped=new GimbalSimulation();stopped.uniform=[0,0];
+// Under tilted single-axis rotation the complete-cycle mean is analytical.
+for(const target of [0,.001,.165,.378,.75,1]){
+  const partial=new GimbalSimulation();const tilt=partial.configurePartialGravity(target);
+  near(Math.cos(tilt*Math.PI/180),target);partial.update(30);
+  partial.meanGravity().forEach((v,i)=>near(v,[0,-target,0][i],1e-9));near(partial.residualGravity(),target);
+  near(Math.hypot(...partial.gravity()),1);partial.reset();near(partial.angles[0],tilt);
+}
+const earthCoverage=new GimbalSimulation(),moonCoverage=new GimbalSimulation();moonCoverage.setEnvironmentGravity(.165);
+earthCoverage.update(60);moonCoverage.update(60);
+assert.deepEqual(Array.from(moonCoverage.coverage.bins),Array.from(earthCoverage.coverage.bins),'Coverage uses unit direction, independently of gravity magnitude');
+near(Math.hypot(...moonCoverage.gravity()),.165);
+const highGravity=new GimbalSimulation();highGravity.setEnvironmentGravity(2);highGravity.configurePartialGravity(.378);highGravity.update(30);near(highGravity.residualGravity(),.378);
+assert.throws(()=>highGravity.configurePartialGravity(3));assert.throws(()=>highGravity.configurePartialGravity(.1,0));assert.throws(()=>highGravity.setEnvironmentGravity(0));
+assert.ok(linearGravityAxis([{time:1,residual:2}],0,2,true,{ceiling:2,target:.1}).upper>=2);
+assert.ok(linearGravityAxis([{time:1,residual:4}],0,2,true,{ceiling:2,target:.1}).upper>=4);
 assert.equal(stopped.meanGravity(),null);assert.equal(stopped.residualGravity(),null);
 stopped.update(600);near(stopped.residualGravity(),1);
 assert.equal(stopped.coverage.visitedCount,1);

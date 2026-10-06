@@ -20,6 +20,8 @@
   let gravityRecords=[],resultSnapshot=null;
   let accelerationRecords=[],instantWidth=0,instantHeight=0,meanWidth=0,meanHeight=0;
   const componentColors=['#2389a5','#cc6759','#8a9d46'];
+  let targetEvaluation='ceiling',targetTolerance=.005,partialApplied=false;
+  const gravityNumber=value=>value.toFixed(12).replace(/(\.\d*?[1-9])0+$|\.0+$/,'$1');
   let coverageWidth=0,coverageHeight=0,mapWidth=0,mapHeight=0;
   const colors = { outer: [38, 143, 172], inner: [233, 166, 74], metal: [130, 150, 162], dark: [49, 72, 87], sample: [215, 227, 232] };
   const add = (a, b) => a.map((v, i) => v + b[i]);
@@ -215,8 +217,8 @@
     $('gravityPlotSummary').textContent=`显示 ${start.toFixed(1)}～${end.toFixed(1)} s · ${stats.sourceCount.toLocaleString('zh-CN')} 个记录点 · 按画面宽度保留真实峰谷`;
   }
   function renderGravityCurve(c,w,h,points,end,options={}) {
-    const {start=0,automatic=false,forExport=false}=options;
-    const axis=linearGravityAxis(points,start,end,automatic);
+    const {start=0,automatic=false,forExport=false,target=sim.targetGravity,environment=sim.environmentGravity,evaluation=targetEvaluation,tolerance=targetTolerance}=options;
+    const axis=linearGravityAxis(points,start,end,automatic,{ceiling:environment,target:target+(evaluation==='match'?tolerance:0)});
     const left=forExport?75:Math.max(40,axis.decimals*6+26),right=forExport?25:12,top=14,bottom=forExport?35:25;
     const plotWidth=w-left-right,plotHeight=h-top-bottom;
     const px=t=>left+(t-start)/Math.max(1e-9,end-start)*plotWidth;
@@ -227,8 +229,9 @@
       const value=(ticks-i)*axis.step,y=py(value);c.beginPath();c.moveTo(left,y);c.lineTo(w-right,y);c.setLineDash([2,5]);c.strokeStyle='#e7eef1';c.stroke();c.setLineDash([]);
       c.fillStyle='#8eA2ad';c.fillText(`${value.toFixed(axis.decimals)}${i===0?' g':''}`,left-7,y+3);
     }
-    const targetY=py(.001);c.beginPath();c.moveTo(left,targetY);c.lineTo(w-right,targetY);c.setLineDash([4,4]);c.strokeStyle='#77b4a2';c.stroke();c.setLineDash([]);
-    c.fillStyle='#398777';c.fillText('目标 0.001 g',w-right-4,targetY-6);
+    if(evaluation==='match'){c.fillStyle='#77b4a222';const upper=py(target+tolerance),lower=py(Math.max(0,target-tolerance));c.fillRect(left,upper,plotWidth,lower-upper);}
+    const targetY=py(target);c.beginPath();c.moveTo(left,targetY);c.lineTo(w-right,targetY);c.setLineDash([4,4]);c.strokeStyle='#77b4a2';c.stroke();c.setLineDash([]);
+    c.fillStyle='#398777';c.fillText(`目标 ${gravityNumber(target)} g${evaluation==='match'?` ± ${gravityNumber(tolerance)} g`:''}`,w-right-4,Math.max(top+11,targetY-6));
     for(let i=0;i<=4;i++){const t=start+(end-start)*i/4;c.textAlign=i===0?'left':i===4?'right':'center';c.fillStyle='#99aab4';c.fillText(forExport?t.toFixed(1):t>=120?`${(t/60).toFixed(1)}min`:`${Math.round(t)}s`,px(t),h-7);}
     c.save();c.beginPath();c.rect(left-1,top-1,plotWidth+2,plotHeight+2);c.clip();
     const reduced=reduceCurvePoints(points,start,end,plotWidth);
@@ -251,16 +254,31 @@
     $('gravityDuration').textContent=`累计 ${format(sim.time)} s`;
     $('instantGravityVector').textContent=`(${sim.gravity().map(v=>format(v,3)).join(', ')})`;
     $('meanGravityVector').textContent=mean?`(${mean.map(v=>format(v,5)).join(', ')})`:'—';
-    const met=residual!==null && residual<=.001;
+    $('targetGravityValue').textContent=`${gravityNumber(sim.targetGravity)} g`;
+    $('targetGravityRule').textContent=targetEvaluation==='match'?`偏差 ≤ ${gravityNumber(targetTolerance)} g`:`平均矢量 ≤ ${gravityNumber(sim.targetGravity)} g`;
+    $('instantGravityMagnitude').textContent=`${gravityNumber(sim.environmentGravity)} g`;
+    $('gravityTargetTag').textContent=targetEvaluation==='match'?`平均目标 ${gravityNumber(sim.targetGravity)} ± ${gravityNumber(targetTolerance)} g`:`平均矢量目标 ≤ ${gravityNumber(sim.targetGravity)} g`;
+    $('environmentSI').textContent=`${(sim.environmentGravity*9.80665).toFixed(6)} m/s² · 1 g = 9.80665 m/s²`;
+    $('targetToleranceControl').hidden=targetEvaluation!=='match';
+    const fixedCeiling=Math.max(sim.environmentGravity,sim.targetGravity+(targetEvaluation==='match'?targetTolerance:0));
+    $('gravityAxisScale').options[0].textContent=`固定 0～${gravityNumber(fixedCeiling)} g`;
+    $('meanAxisScale').options[0].textContent=`固定 ±${gravityNumber(sim.environmentGravity)} g`;
+    gravityChart.setAttribute('aria-label',`累计平均重力模长随时间变化，目标 ${gravityNumber(sim.targetGravity)} g，均匀线性纵轴`);
+    instantChart.setAttribute('aria-label',`瞬时重力 X、Y、Z 分量，单位g，纵轴 ±${gravityNumber(sim.environmentGravity)} g`);
+    const met=residual!==null && (targetEvaluation==='match'?Math.abs(residual-sim.targetGravity)<=targetTolerance:residual<=sim.targetGravity);
     $('gravityStatus').textContent=residual===null?'等待累计':met?'平均指标达标':'平均指标未达标';
     $('gravityStatus').classList.toggle('met',met);
+    if(partialApplied){
+      const fixed=sim.mode==='uniform'&&Math.abs(sim.uniform[0])<1e-10&&Math.abs(sim.uniform[1])>.000001;
+      $('partialPlanSummary').textContent=fixed?`外轴固定 ${format(sim.angles[0],3)}° · 内轴 ${format(sim.uniform[1],3)} rpm · 周期 ${(60/Math.abs(sim.uniform[1])).toFixed(1)} s · 理论周期平均 ${gravityNumber(sim.environmentGravity*Math.abs(Math.cos(sim.angles[0]*RAD)))} g`:'运动参数已改变，当前为自定义方案，请以累计平均曲线评估。';
+    }
     $('coverageValue').textContent=`${sim.coverage.percent.toFixed(2)}%`;
     $('coverageCells').textContent=`${sim.coverage.visitedCount} / ${sim.coverage.bins.length}`;
     $('coverageSamples').textContent=sim.coverage.sampleCount.toLocaleString('zh-CN');
     ['viewGravityResult','exportGravityPng','exportGravityCsv','exportComponentsPng'].forEach(id=>$(id).disabled=sim.time<=0||calculating);
   }
   function captureGravityPoint(){
-    return {time:sim.time,residual:sim.residualGravity(),mean:sim.meanGravity(),instant:sim.gravity(),coverage:sim.coverage.percent,mode:sim.mode,speeds:[...sim.velocities],limits:[...sim.limits],acceleration:sim.acceleration,seed:sim.seed};
+    return {time:sim.time,residual:sim.residualGravity(),mean:sim.meanGravity(),instant:sim.gravity(),coverage:sim.coverage.percent,mode:sim.mode,speeds:[...sim.velocities],limits:[...sim.limits],acceleration:sim.acceleration,seed:sim.seed,environment:sim.environmentGravity,target:sim.targetGravity,evaluation:targetEvaluation,tolerance:targetTolerance};
   }
   function currentGravityPoints(){
     const points=gravityRecords.slice();if(sim.time<=0)return points;
@@ -272,7 +290,7 @@
   function gravitySnapshot(){
     if(sim.time<=0||calculating)return null;
     const points=currentGravityPoints(),current=points[points.length-1];
-    return {points,current,view:{start:Number($('gravityTimeWindow').value)?Math.max(0,current.time-Number($('gravityTimeWindow').value)):0,automatic:$('gravityAxisScale').value==='auto'}};
+    return {points,current,view:{start:Number($('gravityTimeWindow').value)?Math.max(0,current.time-Number($('gravityTimeWindow').value)):0,automatic:$('gravityAxisScale').value==='auto',environment:current.environment,target:current.target,evaluation:current.evaluation,tolerance:current.tolerance}};
   }
   function resultGravityText(residual){return residual<1e-6?'< 0.000001 g':`${residual.toFixed(6)} g`;}
   function resultCanvas(snapshot){
@@ -281,14 +299,14 @@
     c.fillStyle='#24404f';c.font='22px "Microsoft YaHei", "Segoe UI", sans-serif';c.fillText('累计平均重力矢量的模随时间变化',40,42);
     c.font='12px "Microsoft YaHei", "Segoe UI", sans-serif';c.fillStyle='#718894';c.fillText(`样品坐标系 · 显示 ${snapshot.view.start.toFixed(1)}～${snapshot.current.time.toFixed(1)} s · 线性纵轴 · 保留真实峰谷`,40,68);
     const p=snapshot.current;
-    c.fillStyle='#365965';c.fillText(`累计时间：${p.time.toFixed(1)} s    累计平均模：${resultGravityText(p.residual)}    目标：0.001 g`,40,95);
+    c.fillStyle='#365965';c.fillText(`累计时间：${p.time.toFixed(1)} s    累计平均模：${resultGravityText(p.residual)}    目标：${gravityNumber(p.target)} g${p.evaluation==='match'?` ± ${gravityNumber(p.tolerance)} g`:''}`,40,95);
     c.fillStyle='#718894';
     const settings=p.mode==='uniform'?`匀速模式，外轴 ${format(p.speeds[0],3)} rpm，内轴 ${format(p.speeds[1],3)} rpm`:`随机模式，外轴上限 ${format(p.limits[0],3)} rpm，内轴上限 ${format(p.limits[1],3)} rpm，加速度 ${p.acceleration} rpm/s，种子 ${p.seed}`;
     c.fillText(`结束设置：${settings}`,40,118);
     c.save();c.translate(40,139);renderGravityCurve(c,820,335,snapshot.points,Math.max(.1,p.time),{...snapshot.view,forExport:true});c.restore();
     c.textAlign='center';c.fillStyle='#54717f';c.font='13px "Microsoft YaHei", "Segoe UI", sans-serif';c.fillText('仿真时间 / s',450,495);
     c.textAlign='left';c.font='11px "Microsoft YaHei", "Segoe UI", sans-serif';c.fillStyle='#8196a2';
-    c.fillText(`全时段记录点：${snapshot.points.length}（CSV 保留全部）    瞬时重力模长仍为 1 g。`,40,526);
+    c.fillText(`全时段记录点：${snapshot.points.length}（CSV 保留全部）    环境重力 / 瞬时模长：${gravityNumber(p.environment)} g。`,40,526);
     c.fillText('本图评估理想旋转中心的运动学平均，不代表 ISS 真实微重力。',40,546);
     return canvas;
   }
@@ -302,8 +320,8 @@
   }
   function exportGravityCsv(snapshot,status){
     if(!snapshot)return;
-    const headers=['仿真时间(s)','累计平均矢量的模(g)','平均X(g)','平均Y(g)','平均Z(g)','瞬时X(g)','瞬时Y(g)','瞬时Z(g)','外轴实际转速(rpm)','内轴实际转速(rpm)','模式','外轴速度上限(rpm)','内轴速度上限(rpm)','加速度(rpm/s)','随机种子','覆盖率(%)'];
-    const rows=snapshot.points.map(p=>[p.time.toFixed(6),p.residual.toFixed(12),...p.mean.map(v=>v.toFixed(12)),...p.instant.map(v=>v.toFixed(12)),...p.speeds.map(v=>v.toFixed(9)),p.mode==='uniform'?'匀速':'随机',...p.limits.map(v=>v.toFixed(9)),p.acceleration.toFixed(12),p.seed,p.coverage.toFixed(6)].join(','));
+    const headers=['仿真时间(s)','累计平均矢量的模(g)','平均X(g)','平均Y(g)','平均Z(g)','瞬时X(g)','瞬时Y(g)','瞬时Z(g)','外轴实际转速(rpm)','内轴实际转速(rpm)','模式','外轴速度上限(rpm)','内轴速度上限(rpm)','加速度(rpm/s)','随机种子','覆盖率(%)','环境重力(g)','累计平均目标(g)','评估方式','允许偏差(g)'];
+    const rows=snapshot.points.map(p=>[p.time.toFixed(6),p.residual.toFixed(12),...p.mean.map(v=>v.toFixed(12)),...p.instant.map(v=>v.toFixed(12)),...p.speeds.map(v=>v.toFixed(9)),p.mode==='uniform'?'匀速':'随机',...p.limits.map(v=>v.toFixed(9)),p.acceleration.toFixed(12),p.seed,p.coverage.toFixed(6),p.environment.toFixed(12),p.target.toFixed(12),p.evaluation==='match'?'接近目标':'不超过目标',p.tolerance.toFixed(12)].join(','));
     const filename=`gravity-curve-${snapshot.current.time.toFixed(1)}s.csv`;
     downloadBlob(new Blob(['\uFEFF',headers.join(','),'\r\n',rows.join('\r\n'),'\r\n'],{type:'text/csv;charset=utf-8'}),filename);status.textContent=`已生成 ${filename}，包含 ${snapshot.points.length} 个记录点。`;
   }
@@ -331,8 +349,8 @@
   }
   function renderComponentCurve(c,w,h,points,end,options){
     const {key,start=0,automatic=false,forExport=false}=options;
-    let upper=1;
-    if(automatic){let peak=0;for(const p of points)if(p.time>=start&&p.time<=end)peak=Math.max(peak,...p[key].map(Math.abs));upper=linearGravityAxis([{time:start,residual:peak}],start,end,true).upper;}
+    let upper=sim.environmentGravity;
+    if(automatic){let peak=0;for(const p of points)if(p.time>=start&&p.time<=end)peak=Math.max(peak,...p[key].map(Math.abs));upper=linearGravityAxis([{time:start,residual:peak}],start,end,true,{ceiling:sim.environmentGravity,target:0}).upper;}
     const step=upper/2;let decimals=1;while(decimals<9&&Math.abs(step-Number(step.toFixed(decimals)))>step*1e-8)decimals++;
     const left=forExport?75:Math.max(43,decimals*6+28),right=forExport?25:12,top=14,bottom=forExport?35:26,pw=w-left-right,ph=h-top-bottom;
     const px=t=>left+(t-start)/Math.max(1e-9,end-start)*pw,py=v=>top+(1-v/upper)/2*ph;
@@ -363,7 +381,7 @@
     heading('瞬时重力加速度',104,instantStart);c.save();c.translate(40,140);renderComponentCurve(c,820,235,currentAccelerationPoints(),end,{key:'instant',start:instantStart,forExport:true});c.restore();
     heading('累计平均重力加速度',419,meanStart);c.save();c.translate(40,455);renderComponentCurve(c,820,235,snapshot.points,end,{key:'mean',start:meanStart,automatic:$('meanAxisScale').value==='auto',forExport:true});c.restore();
     c.textAlign='center';c.fillStyle='#54717f';c.font='13px "Microsoft YaHei", "Segoe UI", sans-serif';c.fillText('仿真时间 / s',450,398);c.fillText('仿真时间 / s',450,716);
-    c.textAlign='left';c.fillStyle='#8196a2';c.font='11px "Microsoft YaHei", "Segoe UI", sans-serif';c.fillText('平均分量 = 各分量的时间积分 ÷ 累计时间；绘图保留原始峰谷，未进行平滑滤波。',40,756);c.fillText('瞬时重力模长仍为 1 g；本图为理想旋转中心的运动学仿真。',40,777);
+    c.textAlign='left';c.fillStyle='#8196a2';c.font='11px "Microsoft YaHei", "Segoe UI", sans-serif';c.fillText('平均分量 = 各分量的时间积分 ÷ 累计时间；绘图保留原始峰谷，未进行平滑滤波。',40,756);c.fillText(`环境重力 / 瞬时模长：${gravityNumber(current.environment)} g；本图为理想旋转中心的运动学仿真。`,40,777);
     canvas.toBlob(blob=>{if(!blob){$('componentExportStatus').textContent='图片生成失败，请重试。';return;}const filename=`gravity-components-${current.time.toFixed(1)}s.png`;downloadBlob(blob,filename);$('componentExportStatus').textContent=`已生成 ${filename}，请在下载列表中保存。`;},'image/png');
   });
   function drawCoverageChart(){
@@ -419,7 +437,7 @@
     for(let i=0;i<=4;i++){
       c.textAlign=i===0?'left':i===4?'right':'center';c.fillText(`${i*90-180}°`,left+pw*i/4,mapHeight-9);
     }
-    const v=sim.gravity(),longitude=Math.atan2(v[2],v[0]);
+    const v=sim.gravityDirection(),longitude=Math.atan2(v[2],v[0]);
     const x=left+(longitude+Math.PI)/(2*Math.PI)*pw,y=top+(1-v[1])/2*ph;
     c.beginPath();c.arc(x,y,3.5,0,2*Math.PI);c.fillStyle='#e6a047';c.fill();c.strokeStyle='#fff';c.lineWidth=1.2;c.stroke();
   }
@@ -475,7 +493,7 @@
       const v=sphereView(axis);c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+v[0]*r*1.1,cy-v[1]*r*1.1);c.setLineDash(v[2]<0?[3,4]:[]);c.strokeStyle=componentColors[i]+'90';c.lineWidth=1;c.stroke();c.setLineDash([]);
       c.fillStyle=componentColors[i];c.fillText(['X','Y','Z'][i],cx+v[0]*r*1.19,cy-v[1]*r*1.19+4);
     });
-    const current=sphereView(sim.gravity()),x=cx+current[0]*r,y=cy-current[1]*r,behind=current[2]<0;
+    const current=sphereView(sim.gravityDirection()),x=cx+current[0]*r,y=cy-current[1]*r,behind=current[2]<0;
     c.beginPath();c.moveTo(cx,cy);c.lineTo(x,y);c.setLineDash(behind?[4,4]:[]);c.strokeStyle='#e6a047';c.lineWidth=1.5;c.stroke();c.setLineDash([]);
     c.beginPath();c.arc(x,y,5,0,2*Math.PI);c.fillStyle=behind?'#ffffffd9':'#e6a047';c.fill();c.strokeStyle=behind?'#e6a047':'#fff';c.lineWidth=2;c.stroke();
   }
@@ -499,7 +517,6 @@
   });
   $('resetSphereView').addEventListener('click',()=>{sphereCamera={yaw:.65,pitch:.25};$('coverageSphereReadout').textContent=sphereHint;drawCoverageSphere();});
   function setMode(mode) {
-    if (sim.mode===mode) return;
     sim.setMode(mode);
     setPressed($('uniformMode'),mode==='uniform');setPressed($('randomMode'),mode==='random');
     $('uniformControls').hidden=mode!=='uniform';$('randomControls').hidden=mode!=='random';
@@ -510,6 +527,45 @@
   }
   $('uniformMode').addEventListener('click',()=>setMode('uniform'));
   $('randomMode').addEventListener('click',()=>setMode('random'));
+  function syncUniformInputs(){
+    ['outerSpeed','innerSpeed'].forEach((id,i)=>{$(id).value=sim.uniform[i];$(id+'Input').value=sim.uniform[i];$(id+'Value').textContent=`${format(sim.uniform[i],2)} rpm`;$(id+'Error').hidden=true;$(id+'Input').removeAttribute('aria-invalid');});
+  }
+  function syncEnvironmentPreset(){
+    $('environmentPreset').value=['1','0.165','0.378'].includes(String(sim.environmentGravity))?String(sim.environmentGravity):'';
+    $('environmentGravity').value=sim.environmentGravity;
+  }
+  function applyEnvironment(){
+    const input=$('environmentGravity');if(!validParameter(input,$('environmentGravityError'),.000001,10))return;
+    if(input.valueAsNumber===sim.environmentGravity)return;
+    sim.setEnvironmentGravity(input.valueAsNumber);syncEnvironmentPreset();resetSimulation();
+    announce('环境重力已更新，仿真和累计数据已重置。');
+  }
+  $('environmentGravity').addEventListener('change',applyEnvironment);
+  $('environmentPreset').addEventListener('change',()=>{if($('environmentPreset').value){$('environmentGravity').value=$('environmentPreset').value;applyEnvironment();}});
+  function applyTarget(){
+    if(!validParameter($('targetGravity'),$('targetGravityError'),0,10))return;
+    sim.targetGravity=$('targetGravity').valueAsNumber;$('partialPreset').value='';dirtyChart=true;updateReadouts();
+  }
+  $('targetGravity').addEventListener('input',applyTarget);$('targetGravity').addEventListener('change',applyTarget);
+  $('targetEvaluation').addEventListener('change',()=>{targetEvaluation=$('targetEvaluation').value;dirtyChart=true;updateReadouts();});
+  $('targetTolerance').addEventListener('input',()=>{
+    if(!validParameter($('targetTolerance'),$('targetToleranceError'),.000001,10))return;
+    targetTolerance=$('targetTolerance').valueAsNumber;dirtyChart=true;updateReadouts();
+  });
+  $('applyPartialGravity').addEventListener('click',()=>{
+    if($('partialPreset').value)$('targetGravity').value=$('partialPreset').value;
+    if(!validParameter($('targetGravity'),$('targetGravityError'),0,1))return;
+    sim.environmentGravity=1;syncEnvironmentPreset();sim.configurePartialGravity($('targetGravity').valueAsNumber);
+    targetEvaluation='match';$('targetEvaluation').value='match';partialApplied=true;
+    targetTolerance=Math.min(.005,Math.max(.000001,sim.targetGravity*.05));$('targetTolerance').value=targetTolerance;
+    syncUniformInputs();resetSimulation();setMode('uniform');announce('已应用地球环境中的倾斜单轴部分重力方案。');
+  });
+  $('restoreDualAxis').addEventListener('click',()=>{
+    sim.environmentGravity=1;sim.targetGravity=.001;sim.initialAngles=[25,-32];sim.uniform=[1,2];sim.setMode('uniform');
+    $('targetGravity').value=.001;targetEvaluation='ceiling';$('targetEvaluation').value='ceiling';partialApplied=false;
+    $('partialPlanSummary').textContent='已恢复外轴 1 rpm、内轴 2 rpm 的双轴方案；完整 60 秒周期评估方向平均抵消。';
+    syncEnvironmentPreset();syncUniformInputs();resetSimulation();setMode('uniform');
+  });
   [['outerSpeed',0],['innerSpeed',1]].forEach(([id,i]) => {
     function applySpeed(){
       const input=$(id+'Input');if(!validParameter(input,$(id+'Error'),-10,10))return;
@@ -568,7 +624,8 @@
     $('statusText').textContent=running?'仿真运行中':'仿真已暂停';$('statusDot').classList.toggle('paused',!running);
   }
   $('toggleRun').addEventListener('click',()=>{running=!running;previousFrame=null;updateRunState();updateReadouts();announce(running?'仿真已开始':'仿真已暂停');});
-  $('reset').addEventListener('click',()=>{sim.reset();history=[];trail=[];gravityRecords=[];accelerationRecords=[];lastSample=0;previousFrame=null;$('exportStatus').textContent='';$('componentExportStatus').textContent='';$('coverageSphereReadout').textContent=sphereHint;$('coverageMapReadout').textContent='指向分布图可查看网格的方向范围及采样次数。';record();updateReadouts();announce('已重置角度、仿真时间、累计重力矢量、方向覆盖率和随机序列。');});
+  function resetSimulation(){sim.reset();history=[];trail=[];gravityRecords=[];accelerationRecords=[];lastSample=0;previousFrame=null;$('exportStatus').textContent='';$('componentExportStatus').textContent='';$('coverageSphereReadout').textContent=sphereHint;$('coverageMapReadout').textContent='指向分布图可查看网格的方向范围及采样次数。';record();updateReadouts();announce('已重置角度、仿真时间、累计重力矢量、方向覆盖率和随机序列。');}
+  $('reset').addEventListener('click',resetSimulation);
   $('fastForward').addEventListener('click',()=>{
     if(calculating)return;
     calculating=true;previousFrame=null;

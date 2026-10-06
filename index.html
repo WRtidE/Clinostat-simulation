@@ -15,7 +15,7 @@
     <div class="header-right"><span class="live-dot"></span> 本地交互仿真 <span class="version">V 1.0</span></div>
   </header>
   <main>
-    <div class="title-row"><div><div class="eyebrow">DUAL-AXIS GIMBAL</div><h1>二轴回转器<span class="title-slash"> / </span><span class="title-detail">模拟微重力</span></h1><p>独立控制两轴转速，评估样品坐标系中的重力矢量平均效果。</p></div><span class="tag">平均矢量目标 ≤ 0.001 g</span></div>
+    <div class="title-row"><div><div class="eyebrow">DUAL-AXIS GIMBAL</div><h1>二轴回转器<span class="title-slash"> / </span><span class="title-detail">重力仿真</span></h1><p>独立控制两轴转速，评估样品坐标系中的重力矢量平均效果。</p></div><span class="tag" id="gravityTargetTag">平均矢量目标 ≤ 0.001 g</span></div>
     <div class="workspace">
       <aside class="controls panel">
         <div class="section-heading"><h2>运动控制</h2><span class="small-label">CONTROL</span></div>
@@ -33,6 +33,14 @@
           <p class="field-note">两轴以设定加速度从当前转速追踪目标，达到后立即生成下一个随机转速。速度上限范围 0.01～10 rpm，加速度范围 0.000001～10 rpm/s；相同种子与参数可复现。</p>
         </section>
         <hr>
+        <section class="gravity-settings"><div class="section-heading"><h2>重力设置</h2><span class="small-label">GRAVITY</span></div>
+          <div class="partial-gravity-plan"><label class="gravity-preset-label" for="partialPreset">地球环境中的部分重力方案</label><select id="partialPreset"><option value="0.165">月球平均重力 · 约 0.165 g</option><option value="0.378">火星平均重力 · 约 0.378 g</option><option value="0.001">微重力平均目标 · 0.001 g</option><option value="">自定义 · 使用下方目标值</option></select><button id="applyPartialGravity" class="secondary">生成并应用旋转方案</button><p id="partialPlanSummary" class="field-note">外轴固定倾角，内轴 2 rpm；完整周期的平均重力 = 环境重力 × cos(倾角)。应用时重置累计数据。</p><button id="restoreDualAxis" class="secondary">恢复双轴微重力方案</button></div>
+          <label class="gravity-preset-label" for="environmentPreset">环境重力预设</label><select id="environmentPreset"><option value="1">地球 · 1 g</option><option value="0.165">月球 · 约 0.165 g</option><option value="0.378">火星 · 约 0.378 g</option><option value="">自定义</option></select>
+          <div class="label-row"><label for="environmentGravity">环境重力</label><div class="parameter-input"><input id="environmentGravity" type="number" min="0.000001" max="10" step="any" value="1" aria-describedby="environmentGravityError"><span>g</span></div></div><p id="environmentGravityError" class="input-error" role="alert" hidden></p><p id="environmentSI" class="field-note">9.806650 m/s²</p>
+          <div class="label-row"><label for="targetGravity">累计平均目标</label><div class="parameter-input"><input id="targetGravity" type="number" min="0" max="10" step="any" value="0.001" aria-describedby="targetGravityError"><span>g</span></div></div><p id="targetGravityError" class="input-error" role="alert" hidden></p>
+          <label class="gravity-preset-label" for="targetEvaluation">评估方式</label><select id="targetEvaluation"><option value="ceiling">不超过目标 · 微重力评估</option><option value="match">接近目标 · 部分重力评估</option></select><div id="targetToleranceControl" class="label-row" hidden><label for="targetTolerance">允许偏差</label><div class="parameter-input"><input id="targetTolerance" type="number" min="0.000001" max="10" step="any" value="0.005" aria-describedby="targetToleranceError"><span>g</span></div></div><p id="targetToleranceError" class="input-error" role="alert" hidden></p>
+          <p class="field-note">g 为标准地球重力单位。更改环境重力会重置仿真与累计数据；更改评估目标只调整目标线，不会改变实际重力。</p>
+        </section><hr>
         <div class="label-row"><label for="timeScale">仿真倍率</label><output id="timeScaleValue">1×</output></div>
         <div class="time-scale-controls"><div class="time-scale-input"><input id="timeScale" type="number" min="0.01" max="1000" step="any" value="1" inputmode="decimal" aria-describedby="timeScaleHint timeScaleError"><span aria-hidden="true">×</span></div><select id="timeScalePreset" aria-label="常用仿真倍率"><option value="">自定义倍率</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1× · 实时</option><option value="2">2×</option><option value="4">4×</option><option value="10">10×</option><option value="100">100×</option><option value="1000">1000×</option></select></div>
         <p id="timeScaleHint" class="field-note">可输入 0.01～1000×，支持小数；倍率按仿真时间缩放。</p><p id="timeScaleError" class="input-error" role="alert" hidden></p>
@@ -53,14 +61,14 @@
         </section>
         <section class="gravity-panel panel" aria-labelledby="gravityHeading">
           <div class="chart-header"><div><h2 id="gravityHeading">重力矢量平均评估</h2><p>旋转中心 · 样品坐标系 · 从重置开始累计</p></div><span id="gravityStatus" class="gravity-status">等待累计</span></div>
-          <div class="gravity-metrics"><div><span>累计平均矢量的模</span><strong id="residualGravity">— g</strong><small id="gravityDuration">累计 0.0 s</small></div><div><span>评估目标</span><strong>0.001 <small>g</small></strong><small>平均矢量 ≤ 0.001 g</small></div><div><span>瞬时重力的模</span><strong>1.000 <small>g</small></strong><small>旋转改变方向，模长不变</small></div></div>
+          <div class="gravity-metrics"><div><span>累计平均矢量的模</span><strong id="residualGravity">— g</strong><small id="gravityDuration">累计 0.0 s</small></div><div><span>评估目标</span><strong id="targetGravityValue">0.001 g</strong><small id="targetGravityRule">平均矢量 ≤ 0.001 g</small></div><div><span>瞬时重力的模</span><strong id="instantGravityMagnitude">1.000 g</strong><small>由环境重力决定，旋转只改变方向</small></div></div>
           <div class="gravity-vector-row"><span>瞬时矢量 <output id="instantGravityVector">—</output> g</span><span>累计平均 <output id="meanGravityVector">—</output> g</span></div>
           <div class="gravity-chart-controls"><label for="gravityTimeWindow">显示范围 <select id="gravityTimeWindow"><option value="0">全部时间</option><option value="600">最近 10 分钟</option><option value="60">最近 1 分钟</option></select></label><label for="gravityAxisScale">纵轴范围 <select id="gravityAxisScale"><option value="fixed">固定 0～1 g</option><option value="auto">自动缩放 · 线性</option></select></label></div>
           <canvas id="gravityChart" aria-label="累计平均重力矢量模长随仿真时间的变化，线性等间隔纵轴，目标线为0.001g"></canvas>
           <p id="gravityPlotSummary" class="plot-summary">保留原始记录与峰谷，按画面宽度绘制。</p>
           <div class="gravity-actions"><span id="gravityChartNote">累计平均 = 重力矢量的时间积分 ÷ 累计时间</span><div class="gravity-export-buttons"><button id="fastForward" class="secondary">快进计算 10 分钟</button><button id="viewGravityResult" class="secondary" disabled>暂停并查看结果</button><button id="exportGravityPng" class="secondary" disabled>导出 PNG 图片</button><button id="exportGravityCsv" class="secondary" disabled>导出 CSV 数据</button></div></div>
           <p id="exportStatus" class="export-status" role="status" aria-live="polite"></p>
-          <p class="gravity-explanation">此数值衡量重力方向在时间上的平均抵消，达标状态可能随累计时间回升。达到目标不代表真实重力降到 0.001 g 或获得与 ISS 相同的微重力；平均模长仍为 1 g。本模型评估理想旋转中心，不计离心、振动及流体效应。</p>
+          <p class="gravity-explanation" id="gravityExplanation">累计平均矢量衡量方向在时间上的抵消。设置环境重力是在数学模型中更换重力场；实机旋转不会改变当地瞬时重力。目标达标不代表获得与 ISS 相同的微重力。本模型评估理想旋转中心，不计离心、振动及流体效应。</p>
         </section>
         <section class="component-panel panel" aria-labelledby="componentHeading">
           <div class="chart-header"><div><h2 id="componentHeading">重力加速度三分量曲线</h2><p>样品坐标系 · X、Y、Z 分量 · 单位 g</p></div></div>
@@ -95,7 +103,7 @@
   </main>
   <dialog id="gravityResultDialog" aria-labelledby="gravityResultTitle">
     <div class="result-dialog-header"><div><h2 id="gravityResultTitle">累计平均重力曲线 · 仿真结果</h2><p id="gravityResultSummary"></p></div><form method="dialog"><button class="secondary" aria-label="关闭结果预览">关闭</button></form></div>
-    <img id="gravityResultImage" alt="累计平均重力矢量的模随仿真时间变化的结果曲线，按所选范围显示，线性纵轴，包含0.001g目标线">
+    <img id="gravityResultImage" alt="累计平均重力矢量的模随仿真时间变化的结果曲线，按所选范围显示，线性纵轴，包含当前目标线">
     <div class="result-dialog-actions"><span>结果为当前时刻的快照；关闭后可手动继续仿真。</span><button id="resultExportPng" class="secondary">导出此图 PNG</button><button id="resultExportCsv" class="secondary">导出此图数据 CSV</button></div>
     <p id="resultExportStatus" class="export-status" role="status" aria-live="polite"></p>
   </dialog>
