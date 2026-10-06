@@ -164,6 +164,7 @@
       return [-Math.sin(a) * Math.sin(b), -Math.cos(a), Math.sin(a) * Math.cos(b)];
     }
     gravityAt(angles){return this.gravityDirectionAt(angles).map(value=>value*this.environmentGravity);}
+    worldGravity(){return [0,-this.environmentGravity,0];}
     gravityDirection(){return this.gravityDirectionAt(this.angles);}
     gravity() { return this.gravityAt(this.angles); }
     integrateGravity(dt, accelerations) {

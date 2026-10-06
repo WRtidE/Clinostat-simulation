@@ -49,6 +49,7 @@
         <hr>
         <div class="section-heading"><h2>视图设置</h2><span class="small-label">VIEW</span></div>
         <label class="switch-row" for="showAxes"><span>显示旋转轴</span><input type="checkbox" id="showAxes" checked></label>
+        <label class="switch-row" for="showWorldGravity"><span>显示世界重力 · −Y 向下</span><input type="checkbox" id="showWorldGravity" checked></label>
         <label class="switch-row" for="showTrail"><span>显示方向轨迹</span><input type="checkbox" id="showTrail" checked></label>
         <div class="view-buttons" aria-label="相机视角"><button data-view="iso" class="selected" aria-pressed="true">透视</button><button data-view="front" aria-pressed="false">正视</button><button data-view="top" aria-pressed="false">俯视</button></div>
         <div class="principle"><span class="principle-icon">i</span><p>外框绕固定 X 轴旋转，内框绕外框携带的 Y 轴旋转。样品随内框运动。</p></div>
@@ -56,13 +57,14 @@
       <div class="main-column">
         <section class="scene-panel panel">
           <div class="scene-header"><div class="scene-title"><span class="live-dot" id="statusDot"></span><span id="statusText">仿真运行中</span></div><div class="scene-meta"><span id="modeBadge">匀速模式</span><span class="divider">|</span><span id="clock">00:00.0</span></div></div>
-          <div class="canvas-wrap" id="canvasWrap"><canvas id="scene" aria-label="可拖拽旋转视角的二轴回转器三维仿真。蓝色为外框，橙色为内框。">浏览器需要支持 Canvas 才能显示三维仿真。</canvas><div class="scene-caption"><span class="caption-title">双轴嵌套旋转</span><span>样品局部 +Z 方向的轨迹</span></div><button id="resetView" class="floating-button" aria-label="还原相机视角">⌖ 还原视角</button><div class="canvas-help">拖动旋转视角<span>·</span>滚轮缩放</div><div class="scene-legend"><span><i class="axis-dot outer"></i>外框 α</span><span><i class="axis-dot inner"></i>内框 β</span><span><i class="axis-dot sample"></i>样品</span></div></div>
+          <div class="canvas-wrap" id="canvasWrap"><canvas id="scene" aria-label="可拖拽旋转视角的二轴回转器三维仿真。蓝色为外框，橙色为内框，紫色箭头为世界坐标系−Y方向的实际重力，绿色标记为样品+Z朝向。">浏览器需要支持 Canvas 才能显示三维仿真。</canvas><div class="scene-caption"><span class="caption-title">双轴嵌套旋转</span><span>样品局部 +Z 方向的轨迹</span></div><button id="resetView" class="floating-button" aria-label="还原相机视角">⌖ 还原视角</button><div class="canvas-help">拖动旋转视角<span>·</span>滚轮缩放</div><div class="scene-legend"><span><i class="axis-dot outer"></i>外框 α</span><span><i class="axis-dot inner"></i>内框 β</span><span><i class="axis-dot sample"></i>样品 +Z</span><span><i class="axis-dot world-gravity"></i>世界重力 −Y</span></div></div>
+          <div class="world-gravity-readout"><span><i class="axis-dot world-gravity"></i>世界坐标系重力 <output id="worldGravityVector">(0, −1, 0) g</output></span><small>紫色箭头沿世界 −Y 向下；箭头长度仅表示方向，不随重力大小缩放。</small></div>
           <div class="metrics"><div><span class="metric-label"><i class="axis-dot outer"></i>外轴角度 α</span><strong id="outerAngle">25.0<span>°</span></strong><small id="outerActual">1.330 rpm</small></div><div><span class="metric-label"><i class="axis-dot inner"></i>内轴角度 β</span><strong id="innerAngle">−32.0<span>°</span></strong><small id="innerActual">2.000 rpm</small></div><div><span class="metric-label">样品方向 · 世界坐标</span><strong class="vector" id="direction">(−0.53, −0.36, 0.77)</strong><small>局部 +Z 单位向量</small></div></div>
         </section>
         <section class="gravity-panel panel" aria-labelledby="gravityHeading">
           <div class="chart-header"><div><h2 id="gravityHeading">重力矢量平均评估</h2><p>旋转中心 · 样品坐标系 · 从重置开始累计</p></div><span id="gravityStatus" class="gravity-status">等待累计</span></div>
           <div class="gravity-metrics"><div><span>累计平均矢量的模</span><strong id="residualGravity">— g</strong><small id="gravityDuration">累计 0.0 s</small></div><div><span>评估目标</span><strong id="targetGravityValue">0.001 g</strong><small id="targetGravityRule">平均矢量 ≤ 0.001 g</small></div><div><span>瞬时重力的模</span><strong id="instantGravityMagnitude">1.000 g</strong><small>由环境重力决定，旋转只改变方向</small></div></div>
-          <div class="gravity-vector-row"><span>瞬时矢量 <output id="instantGravityVector">—</output> g</span><span>累计平均 <output id="meanGravityVector">—</output> g</span></div>
+          <div class="gravity-vector-row"><span>样品系瞬时矢量 <output id="instantGravityVector">—</output> g</span><span>样品系累计平均 <output id="meanGravityVector">—</output> g</span></div>
           <div class="gravity-chart-controls"><label for="gravityTimeWindow">显示范围 <select id="gravityTimeWindow"><option value="0">全部时间</option><option value="600">最近 10 分钟</option><option value="60">最近 1 分钟</option></select></label><label for="gravityAxisScale">纵轴范围 <select id="gravityAxisScale"><option value="fixed">固定 0～1 g</option><option value="auto">自动缩放 · 线性</option></select></label></div>
           <canvas id="gravityChart" aria-label="累计平均重力矢量模长随仿真时间的变化，线性等间隔纵轴，目标线为0.001g"></canvas>
           <p id="gravityPlotSummary" class="plot-summary">保留原始记录与峰谷，按画面宽度绘制。</p>

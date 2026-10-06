@@ -73,6 +73,27 @@
   function worldLabel(point, text, color) {
     const p = project(point); ctx.fillStyle = color; ctx.font = '11px "Segoe UI", "Microsoft YaHei", sans-serif'; ctx.textAlign = 'center'; ctx.fillText(text, p[0], p[1]);
   }
+  function drawWorldGravity(){
+    if(!$('showWorldGravity').checked)return;
+    const origin=project([0,0,0]),tip=project(scale(normalize(sim.worldGravity()),1.12));
+    const dx=tip[0]-origin[0],dy=tip[1]-origin[1],length=Math.hypot(dx,dy),color='#8960ba';
+    ctx.save();ctx.setLineDash([]);
+    if(length>=12){
+      ctx.beginPath();ctx.moveTo(origin[0],origin[1]);ctx.lineTo(tip[0],tip[1]);ctx.strokeStyle='#ffffffbb';ctx.lineWidth=6;ctx.stroke();
+      ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.stroke();
+      const ux=dx/length,uy=dy/length;ctx.beginPath();ctx.moveTo(tip[0],tip[1]);ctx.lineTo(tip[0]-ux*11-uy*5,tip[1]-uy*11+ux*5);ctx.lineTo(tip[0]-ux*11+uy*5,tip[1]-uy*11-ux*5);ctx.closePath();ctx.fillStyle=color;ctx.fill();
+    }else{
+      // Looking along world Y: a cross denotes the downward vector into the screen.
+      const behind=viewPoint([0,-1,0])[2]<viewPoint([0,0,0])[2];
+      ctx.beginPath();ctx.arc(tip[0],tip[1],8,0,2*Math.PI);ctx.fillStyle='#ffffffde';ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+      if(behind){ctx.beginPath();ctx.moveTo(tip[0]-3,tip[1]-3);ctx.lineTo(tip[0]+3,tip[1]+3);ctx.moveTo(tip[0]+3,tip[1]-3);ctx.lineTo(tip[0]-3,tip[1]+3);ctx.stroke();}
+      else{ctx.beginPath();ctx.arc(tip[0],tip[1],2.5,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();}
+    }
+    const text=`世界重力 −Y · ${gravityNumber(sim.environmentGravity)} g`;
+    ctx.font='11px "Segoe UI", "Microsoft YaHei", sans-serif';const textWidth=ctx.measureText(text).width;
+    const x=Math.max(6,Math.min(width-textWidth-8,tip[0]+14)),y=Math.max(18,Math.min(height-18,tip[1]+4));
+    ctx.fillStyle='#ffffffdb';ctx.fillRect(x-4,y-13,textWidth+8,20);ctx.textAlign='left';ctx.fillStyle=color;ctx.fillText(text,x,y);ctx.restore();
+  }
   let faces;
   function face(points, color, transform = identity, outline = false) {
     faces.push({ points: points.map(transform), color, outline });
@@ -164,8 +185,9 @@
       worldLabel([2.46,0,0],'X / α','#29829b'); worldLabel(outer([0,2.0,0]),'Y / β','#bc8a43');
       strokePath([[0,0,0],inner([0,0,.82])],'#277e7299',1.5);
       const p = project(inner([0,0,.84])); ctx.beginPath(); ctx.arc(p[0],p[1],3.5,0,Math.PI*2); ctx.fillStyle = '#318f7f'; ctx.fill();
-      worldLabel(inner([0,0,1.0]),'+Z','#318f7f');
+      worldLabel(inner([0,0,1.0]),'样品 +Z','#318f7f');
     }
+    drawWorldGravity();
     // Fixed world triad stays in the corner while the camera orbits.
     const ox = width - 47, oy = height - 62;
     [['X',[1,0,0],'#7c9eaf'],['Y',[0,1,0],'#72a095'],['Z',[0,0,1],'#b5a181']].forEach(([label,v,color]) => {
@@ -247,6 +269,7 @@
     $('outerTarget').textContent=`当前目标：${format(sim.targets[0],3)} rpm`;
     $('innerTarget').textContent=`当前目标：${format(sim.targets[1],3)} rpm`;
     $('direction').textContent=`(${sim.direction().map(v=>format(v,2)).join(', ')})`;
+    $('worldGravityVector').textContent=`(0, −${gravityNumber(sim.environmentGravity)}, 0) g`;
     const tenth = Math.floor((sim.time+1e-8)*10), minutes = Math.floor(tenth/600);
     $('clock').textContent=`${String(minutes).padStart(2,'0')}:${String(Math.floor(tenth/10)%60).padStart(2,'0')}.${tenth%10}`;
     const mean=sim.meanGravity(),residual=sim.residualGravity();

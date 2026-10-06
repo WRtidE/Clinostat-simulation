@@ -49,6 +49,14 @@ for(const target of [0,.001,.165,.378,.75,1]){
   near(Math.hypot(...partial.gravity()),1);partial.reset();near(partial.angles[0],tilt);
 }
 const earthCoverage=new GimbalSimulation(),moonCoverage=new GimbalSimulation();moonCoverage.setEnvironmentGravity(.165);
+// Independent forward rotation must recover the same downward world field.
+for(const magnitude of [.165,1,2])for(const angles of [[0,0],[80.503,120],[-43,297],[90,-90]]){
+  const frameCheck=new GimbalSimulation();frameCheck.environmentGravity=magnitude;frameCheck.angles=angles;
+  const v=frameCheck.gravity(),a=angles[0]*Math.PI/180,b=angles[1]*Math.PI/180;
+  const inner=[v[0]*Math.cos(b)+v[2]*Math.sin(b),v[1],-v[0]*Math.sin(b)+v[2]*Math.cos(b)];
+  const world=[inner[0],inner[1]*Math.cos(a)-inner[2]*Math.sin(a),inner[1]*Math.sin(a)+inner[2]*Math.cos(a)];
+  world.forEach((component,i)=>near(component,frameCheck.worldGravity()[i]));
+}
 earthCoverage.update(60);moonCoverage.update(60);
 assert.deepEqual(Array.from(moonCoverage.coverage.bins),Array.from(earthCoverage.coverage.bins),'Coverage uses unit direction, independently of gravity magnitude');
 near(Math.hypot(...moonCoverage.gravity()),.165);
